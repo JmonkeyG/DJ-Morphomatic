@@ -52,7 +52,6 @@ class Expander:
         self.RETRY_MAX_COUNT = 8
         self.scope = scope
         self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=self.scope))
-        # self.available_genres = self.sp.recommendation_genre_seeds()['genres']
 
     def expand(self,
                playlist_name,
@@ -88,27 +87,25 @@ class Expander:
             rand_int = 0
 
         for i in range(self.expand_val // 5):  # add 5 songs to playlist
-            self.add_songs(self.playlist_id, self.suggest_songs(self.get_track_ids(rand_int), 5))
+            self.add_songs(self.suggest_songs(self.get_track_ids(rand_int), 5))
 
         if self.expand_val % 5 != 0:  # add the remaining songs to playlist
-            self.add_songs(self.playlist_id, self.suggest_songs(self.get_track_ids(rand_int), self.expand_val % 5))
+            self.add_songs(self.suggest_songs(self.get_track_ids(rand_int), self.expand_val % 5))
 
         return True
 
     def add_songs(self,
-                  playlist_id: str,
                   song_uris: list
                   ):
         """
         Adds songs to a playlist
 
-        :param playlist_id:
         :param song_uris:
         :return: A bool that contains if the songs were added to the playlist
         """
         if not song_uris:
             raise ValueError('Error: param->song_uris must contain a list of song uris')
-        self.sp.playlist_add_items(playlist_id, self.check_valid_uris([song_uri['uri'] for song_uri in song_uris]))
+        self.sp.playlist_add_items(self.playlist_id, self.check_valid_uris([song_uri['uri'] for song_uri in song_uris]))
         return True
 
     def get_track_ids(self,
@@ -156,19 +153,18 @@ class Expander:
         :return: A list of valid song uris
         """
         valid_song_uris = []
-        range_val = 0
-        while len(song_uris) > 0:
-            range_val += 1
-            song_uris = song_uris[100:]
+        range_val = self.playlist_length // 100
         current_tracks = []
+
         for i in range(range_val):
-            current_tracks += self.sp.tracks(song_uris[100 * i:100 * (i + 1)])['tracks']
-            track_ids = [(item['track'])['id'] for item in current_tracks]
-            for track_id in track_ids:
-                current_tracks.append(f'spotify:track:{track_id}')
+            current_tracks += self.sp.playlist_items(playlist_id=self.playlist_id, limit=100, offset=i * 100)['items']
+        current_tracks += self.sp.playlist_items(playlist_id=self.playlist_id, limit=self.playlist_length % 100, offset=range_val * 100)['items']
+        current_tracks = [track['track']['uri'] for track in current_tracks]
+
         for song_uri in song_uris:
             if song_uri not in current_tracks:
                 valid_song_uris.append(song_uri)
             else:
                 print('failed to add song: already in playlist')
+
         return valid_song_uris
